@@ -3,67 +3,49 @@ import random
 
 
 class CloudResourceAllocation:
-    def __init__(self, num_tasks, num_resources, cost_matrix):
-        """
-        :param num_tasks: określa rozmiar problemu
-        :param num_resources:  określa rozmiar problemu
-        :param cost_matrix: macierz kosztów alokacji zadań do zasobów
-        """
+    def __init__(self, num_tasks, num_resources, cost_matrix, processing_times):
         self.num_tasks = num_tasks
         self.num_resources = num_resources
         self.cost_matrix = cost_matrix
-        self.allocation_matrix = None
+        self.processing_times = processing_times  # Czas przetwarzania dla każdego zadania
+        self.allocation_matrix = [[0 for _ in range(num_resources)] for _ in range(num_tasks)]
 
     def initial_optimization(self):
-        """
-        Używa programowania liniowego całkowitoliczbowego (Binary Integer Programming) do znajdowania początkowego
-        rozwiązania
-        """
         model = pulp.LpProblem("Initial_Resource_Allocation", pulp.LpMinimize)
-
-        # Zmienne decyzyjne dla każdej pary zadanie-zasób
         allocation_vars = pulp.LpVariable.dicts("Allocation",
                                                 ((i, j) for i in range(self.num_tasks)
                                                  for j in range(self.num_resources)),
                                                 cat='Binary')
 
-        # Funkcja celu: minimalizacja całkowitego kosztu
-        model += pulp.lpSum([self.cost_matrix[i][j] * allocation_vars[i, j]
+        # Funkcja celu: minimalizacja sumy czasów przetwarzania na wszystkich zasobach
+        model += pulp.lpSum([self.processing_times[i] * allocation_vars[i, j]
                              for i in range(self.num_tasks)
                              for j in range(self.num_resources)])
 
-        # Ograniczenia: każde zadanie musi być przypisane do dokładnie jednego zasobu
+        # Ograniczenia jak poprzednio
         for i in range(self.num_tasks):
             model += pulp.lpSum([allocation_vars[i, j] for j in range(self.num_resources)]) == 1
-
-        # Ograniczenia: każdy zasób może być przypisany do co najwyżej jednego zadania
         for j in range(self.num_resources):
             model += pulp.lpSum([allocation_vars[i, j] for i in range(self.num_tasks)]) <= 1
 
-        # Rozwiązanie problemu
         model.solve()
 
         # Aktualizacja macierzy alokacji
         self.allocation_matrix = [[allocation_vars[i, j].varValue for j in range(self.num_resources)]
                                   for i in range(self.num_tasks)]
 
-        # Wypisanie wyniku (opcjonalne)
-        for i in range(self.num_tasks):
-            for j in range(self.num_resources):
-                if allocation_vars[i, j].varValue == 1:
-                    print(f"Zadanie {i} jest przypisane do zasobu {j}")
-
     def evolutionary_optimization(self):
         """
         Algorytm 3: Optymalizacja Ewolucyjna
         Założenie: Prosty mechanizm ewolucyjny, który losowo realokuje zadania
         """
-        for _ in range(100):  # Liczba iteracji
+        for _ in range(100):
             task = random.randint(0, self.num_tasks - 1)
-            resource = random.randint(0, self.num_resources - 1)
+            new_resource = random.randint(0, self.num_resources - 1)
+            current_resource = self.get_current_resource(task)
 
-            if self.can_improve_solution(task, resource):
-                self.perform_reallocation(task, resource)
+            if current_resource != new_resource and self.can_improve_solution(task, new_resource):
+                self.perform_reallocation(task, current_resource, new_resource)
 
     def can_improve_solution(self, task_index, resource_index):
         """
@@ -79,16 +61,8 @@ class CloudResourceAllocation:
         """
         # Usunięcie zadania z obecnego zasobu
         self.allocation_matrix[task_index][old_resource_index] = 0
-
         # Przypisanie zadania do nowego zasobu
         self.allocation_matrix[task_index][new_resource_index] = 1
-
-    def compute_gelr(self, task_index, resource_index):
-        """
-        Prosta heurystyka obliczająca GELR
-        """
-        return abs(self.calculate_total_utility() - self.calculate_total_utility_after_reallocation(task_index,
-                                                                                                    resource_index))
 
     def minimize_splr(self):
         """
@@ -100,7 +74,7 @@ class CloudResourceAllocation:
             current_resource = self.get_current_resource(task)  # Pobranie obecnego zasobu dla zadania
 
             for resource in range(self.num_resources):
-                if resource != current_resource:  # Sprawdzanie, czy zasób jest różny od obecnego
+                if resource != current_resource: # Sprawdzanie, czy zasób jest różny od obecnego
                     # Obliczanie SPELR dla każdej pary zadanie-zasób
                     splr = self.compute_splr(task, resource)
                     # Znajdowanie najlepszego zasobu dla realokacji
@@ -116,8 +90,6 @@ class CloudResourceAllocation:
         """
         Oblicza SPELR dla danego zadania i zasobu.
         """
-        # Implementacja zależy od specyfiki problemu
-        # Przykładowa implementacja
         current_utility = self.calculate_utility(task_index, self.get_current_resource(task_index))
         new_utility = self.calculate_utility(task_index, resource_index)
         return current_utility - new_utility
@@ -137,7 +109,7 @@ class CloudResourceAllocation:
         """
         for resource in range(self.num_resources):
             mts = self.get_multiplexing_tasks(resource)
-            nsts = []  # Zestaw zadań z negatywnym SPELR
+            nsts = []
             for task in mts:
                 q = self.min_single(task, resource)
                 if q != -1:
@@ -146,10 +118,16 @@ class CloudResourceAllocation:
                                                                                                           resource) < 0:
                         nsts.append(task)
 
-            # Znajdź zadanie z minimalnym GELR w zestawie nsts
             if nsts:
                 min_gelr_task = min(nsts, key=lambda k: self.compute_gelr(k, resource))
                 self.perform_reallocation(min_gelr_task, resource, self.min_single(min_gelr_task, resource))
+
+    def compute_gelr(self, task_index, resource_index):
+        """
+        Prosta heurystyka obliczająca GELR
+        """
+        return abs(self.calculate_total_utility() - self.calculate_total_utility_after_reallocation(task_index,
+                                                                                                    resource_index))
 
     def get_multiplexing_tasks(self, resource):
         """
@@ -180,6 +158,9 @@ class CloudResourceAllocation:
         return best_resource
 
     def find_nash_equilibrium(self):
+        """
+        Szukanie równowagi Nasha.
+        """
         for task in range(self.num_tasks):
             for resource in range(self.num_resources):
                 if self.can_improve_nash(task, resource):
@@ -188,19 +169,29 @@ class CloudResourceAllocation:
 
     def can_improve_nash(self, task_index, resource_index):
         """
-        Prosta heurystyka sprawdzająca możliwość poprawy w kontekście Nasha
+        Sprawdza, czy istnieje możliwość poprawy użyteczności zgodnie z równowagą Nasha.
         """
-        current_utility = self.calculate_utility(task_index, resource_index)
-        new_utility = self.calculate_utility_after_reallocation(task_index, resource_index)
+        current_resource = self.get_current_resource(task_index)
+        if current_resource == resource_index:
+            return False
+
+        # Obliczanie użyteczności przed i po potencjalnej realokacji
+        current_utility = self.calculate_utility(task_index, current_resource)
+        new_utility = self.calculate_utility(task_index, resource_index)
+
+        # Sprawdzanie, czy nowa użyteczność jest większa niż obecna
         return new_utility > current_utility
 
     def calculate_utility(self, task_index, resource_index):
         """
-        Przykładowa implementacja obliczania użyteczności zadania.
-        Zwraca przykładową wartość - należy dostosować do specyfiki problemu.
+        Oblicza użyteczność zadania w kontekście alokacji do danego zasobu.
         """
-        # Przykład: użyteczność może być związana z kosztem alokacji
-        return self.cost_matrix[task_index][resource_index]
+        # Załóżmy, że użyteczność jest odwrotnie proporcjonalna do czasu przetwarzania
+        # i jest związana z kosztem alokacji
+        if self.allocation_matrix[task_index][resource_index] == 1:
+            return 1 / (self.processing_times[task_index] * self.cost_matrix[task_index][resource_index])
+        else:
+            return 0
 
     def calculate_utility_after_reallocation(self, task_index, resource_index):
         """
@@ -208,13 +199,13 @@ class CloudResourceAllocation:
         Zwraca przykładową wartość - należy dostosować do specyfiki problemu.
         """
         # Przykład: użyteczność po realokacji - załóżmy, że jest to zawsze lepsza
-        return self.cost_matrix[task_index][resource_index] - 1  # Przykładowe zmniejszenie kosztu
+        return self.cost_matrix[task_index][resource_index] - 1
 
     def calculate_total_utility(self):
         """
-        Oblicza całkowitą użyteczność aktualnego rozwiązania.
-        Przykładowa implementacja - powinna być dostosowana do specyfiki problemu.
-        """
+         Oblicza całkowitą użyteczność aktualnego rozwiązania.
+         Przykładowa implementacja - powinna być dostosowana do specyfiki problemu.
+         """
         total_utility = 0
         for i in range(self.num_tasks):
             for j in range(self.num_resources):
@@ -228,12 +219,7 @@ class CloudResourceAllocation:
         Przykładowa implementacja - powinna być dostosowana do specyfiki problemu.
         """
         # Symulacja realokacji zadania
-        original_resource = -1
-        for j in range(self.num_resources):
-            if self.allocation_matrix[task_index][j] == 1:
-                original_resource = j
-                break
-
+        original_resource = self.get_current_resource(task_index)
         self.allocation_matrix[task_index][original_resource] = 0
         self.allocation_matrix[task_index][resource_index] = 1
 
@@ -243,22 +229,27 @@ class CloudResourceAllocation:
         # Przywrócenie oryginalnej alokacji
         self.allocation_matrix[task_index][resource_index] = 0
         self.allocation_matrix[task_index][original_resource] = 1
-
         return total_utility
+
+    def print_allocation_matrix(self, title="Macierz Alokacji"):
+        """
+        Wyświetla aktualny stan macierzy alokacji.
+        """
+        print(title)
+        for row in self.allocation_matrix:
+            print(' '.join(map(str, row)))
+        print()
 
     def run(self):
         # Uruchomienie początkowej optymalizacji
         self.initial_optimization()
-
-        # Uruchomienie algorytmu minimalizacji SPELR
+        # Wyświetla macierz alokacji przed optymalizacją
+        self.print_allocation_matrix("Macierz Alokacji Początkowej:")
         self.minimize_splr()
-
-        # Uruchomienie algorytmu minimalizacji GELR
         self.minimize_gelr()
-
-        # Uruchomienie optymalizacji ewolucyjnej
         self.evolutionary_optimization()
-
+        # Wyświetla macierz alokacji po optymalizacji
+        self.print_allocation_matrix("Macierz Alokacji Końcowej:")
         # Sprawdzenie, czy osiągnięto równowagę Nasha
         if self.find_nash_equilibrium():
             print("Znaleziono równowagę Nasha.")
@@ -271,7 +262,11 @@ if __name__ == '__main__':
     num_tasks = 5
     num_resources = 5
     cost_matrix = [[random.randint(1, 10) for _ in range(num_resources)] for _ in range(num_tasks)]
+    processing_times = [random.randint(1, 10) for _ in range(num_tasks)]
+
+    print("Czas:")
+    print(processing_times)
 
     # Utworzenie instancji klasy i uruchomienie procesu optymalizacji
-    allocation_system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix)
+    allocation_system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
     allocation_system.run()
