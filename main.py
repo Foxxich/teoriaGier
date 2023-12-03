@@ -72,21 +72,16 @@ class CloudResourceAllocation:
         return self.calculate_utility(task_index, resource_index) < self.calculate_utility_after_reallocation(
             task_index, resource_index)
 
-    def perform_reallocation(self, task_index, resource_index):
+    def perform_reallocation(self, task_index, old_resource_index, new_resource_index):
         """
-        Realokuje zadanie do nowego zasobu
+        Realokuje zadanie (task_index) z obecnego zasobu (old_resource_index)
+        do nowego zasobu (new_resource_index).
         """
-        for j in range(self.num_resources):
-            self.allocation_matrix[task_index][j] = 0
-        self.allocation_matrix[task_index][resource_index] = 1
+        # Usunięcie zadania z obecnego zasobu
+        self.allocation_matrix[task_index][old_resource_index] = 0
 
-    def compute_splr(self, task_index, resource_index):
-        """
-        Prosta heurystyka obliczająca SPELR
-        """
-        return abs(
-            self.calculate_utility(task_index, resource_index) -
-            self.calculate_utility_after_reallocation(task_index, resource_index))
+        # Przypisanie zadania do nowego zasobu
+        self.allocation_matrix[task_index][new_resource_index] = 1
 
     def compute_gelr(self, task_index, resource_index):
         """
@@ -100,29 +95,89 @@ class CloudResourceAllocation:
         Algorytm 1: Minimizacja SPELR
         """
         for task in range(self.num_tasks):
+            min_splr = float('inf')
+            best_resource = None
+            current_resource = self.get_current_resource(task)  # Pobranie obecnego zasobu dla zadania
+
             for resource in range(self.num_resources):
-                # Obliczanie SPELR dla każdej pary zadanie-zasób
-                splr = self.compute_splr(task, resource)
-                # Jeśli znajdziesz możliwość poprawy, wykonaj realokację
-                if splr < 0:  # Przykładowe kryterium
-                    self.perform_reallocation(task, resource)
+                if resource != current_resource:  # Sprawdzanie, czy zasób jest różny od obecnego
+                    # Obliczanie SPELR dla każdej pary zadanie-zasób
+                    splr = self.compute_splr(task, resource)
+                    # Znajdowanie najlepszego zasobu dla realokacji
+                    if splr < min_splr:
+                        min_splr = splr
+                        best_resource = resource
+
+            # Jeśli znaleziono lepszą realokację, wykonaj ją
+            if best_resource is not None and min_splr < 0:
+                self.perform_reallocation(task, current_resource, best_resource)
+
+    def compute_splr(self, task_index, resource_index):
+        """
+        Oblicza SPELR dla danego zadania i zasobu.
+        """
+        # Implementacja zależy od specyfiki problemu
+        # Przykładowa implementacja
+        current_utility = self.calculate_utility(task_index, self.get_current_resource(task_index))
+        new_utility = self.calculate_utility(task_index, resource_index)
+        return current_utility - new_utility
+
+    def get_current_resource(self, task_index):
+        """
+        Zwraca indeks obecnego zasobu przypisanego do zadania.
+        """
+        for j in range(self.num_resources):
+            if self.allocation_matrix[task_index][j] == 1:
+                return j
+        return None
 
     def minimize_gelr(self):
         """
-        Algorytm 2: Minimizacja GELR
+        Algorytm 2: Minimizacja GELR zgodnie z opisem w artykule
         """
         for resource in range(self.num_resources):
-            # Znajdź zadanie, które minimalizuje GELR po realokacji tego zasobu
-            min_gelr = float('inf')
-            task_to_reallocate = None
-            for task in range(self.num_tasks):
-                gelr = self.compute_gelr(task, resource)
-                if gelr < min_gelr:
-                    min_gelr = gelr
-                    task_to_reallocate = task
-            # Wykonaj realokację dla znalezionego zadania
-            if task_to_reallocate is not None:
-                self.perform_reallocation(task_to_reallocate, resource)
+            mts = self.get_multiplexing_tasks(resource)
+            nsts = []  # Zestaw zadań z negatywnym SPELR
+            for task in mts:
+                q = self.min_single(task, resource)
+                if q != -1:
+                    self.perform_reallocation(task, resource, q)
+                    if self.calculate_utility(task, resource) - self.calculate_utility_after_reallocation(task,
+                                                                                                          resource) < 0:
+                        nsts.append(task)
+
+            # Znajdź zadanie z minimalnym GELR w zestawie nsts
+            if nsts:
+                min_gelr_task = min(nsts, key=lambda k: self.compute_gelr(k, resource))
+                self.perform_reallocation(min_gelr_task, resource, self.min_single(min_gelr_task, resource))
+
+    def get_multiplexing_tasks(self, resource):
+        """
+        Zwraca zestaw zadań multiplexujących określony zasób.
+        W przykładowej implementacji, zadanie jest uważane za multiplexujące,
+        jeśli obecnie korzysta z danego zasobu.
+        """
+        multiplexing_tasks = []
+        for task in range(self.num_tasks):
+            if self.allocation_matrix[task][resource] == 1:
+                multiplexing_tasks.append(task)
+        return multiplexing_tasks
+
+    def min_single(self, task, resource):
+        """
+        Znajduje optymalną realokację dla pojedynczego zadania.
+        W tej implementacji, sprawdzamy każdy zasób inny niż obecnie przypisany
+        i wybieramy ten, który minimalizuje GELR.
+        """
+        min_gelr = float('inf')
+        best_resource = None
+        for r in range(self.num_resources):
+            if r != resource:
+                current_gelr = self.compute_gelr(task, r)
+                if current_gelr < min_gelr:
+                    min_gelr = current_gelr
+                    best_resource = r
+        return best_resource
 
     def find_nash_equilibrium(self):
         for task in range(self.num_tasks):
