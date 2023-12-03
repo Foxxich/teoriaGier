@@ -55,6 +55,7 @@ class CloudResourceAllocation:
 
     def evolutionary_optimization(self):
         """
+        Algorytm 3: Optymalizacja Ewolucyjna
         Założenie: Prosty mechanizm ewolucyjny, który losowo realokuje zadania
         """
         for _ in range(100):  # Liczba iteracji
@@ -93,6 +94,35 @@ class CloudResourceAllocation:
         """
         return abs(self.calculate_total_utility() - self.calculate_total_utility_after_reallocation(task_index,
                                                                                                     resource_index))
+
+    def minimize_splr(self):
+        """
+        Algorytm 1: Minimizacja SPELR
+        """
+        for task in range(self.num_tasks):
+            for resource in range(self.num_resources):
+                # Obliczanie SPELR dla każdej pary zadanie-zasób
+                splr = self.compute_splr(task, resource)
+                # Jeśli znajdziesz możliwość poprawy, wykonaj realokację
+                if splr < 0:  # Przykładowe kryterium
+                    self.perform_reallocation(task, resource)
+
+    def minimize_gelr(self):
+        """
+        Algorytm 2: Minimizacja GELR
+        """
+        for resource in range(self.num_resources):
+            # Znajdź zadanie, które minimalizuje GELR po realokacji tego zasobu
+            min_gelr = float('inf')
+            task_to_reallocate = None
+            for task in range(self.num_tasks):
+                gelr = self.compute_gelr(task, resource)
+                if gelr < min_gelr:
+                    min_gelr = gelr
+                    task_to_reallocate = task
+            # Wykonaj realokację dla znalezionego zadania
+            if task_to_reallocate is not None:
+                self.perform_reallocation(task_to_reallocate, resource)
 
     def find_nash_equilibrium(self):
         for task in range(self.num_tasks):
@@ -162,8 +192,19 @@ class CloudResourceAllocation:
         return total_utility
 
     def run(self):
+        # Uruchomienie początkowej optymalizacji
         self.initial_optimization()
+
+        # Uruchomienie algorytmu minimalizacji SPELR
+        self.minimize_splr()
+
+        # Uruchomienie algorytmu minimalizacji GELR
+        self.minimize_gelr()
+
+        # Uruchomienie optymalizacji ewolucyjnej
         self.evolutionary_optimization()
+
+        # Sprawdzenie, czy osiągnięto równowagę Nasha
         if self.find_nash_equilibrium():
             print("Znaleziono równowagę Nasha.")
         else:
