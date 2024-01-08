@@ -74,7 +74,7 @@ class CloudResourceAllocation:
             current_resource = self.get_current_resource(task)  # Pobranie obecnego zasobu dla zadania
 
             for resource in range(self.num_resources):
-                if resource != current_resource: # Sprawdzanie, czy zasób jest różny od obecnego
+                if resource != current_resource:  # Sprawdzanie, czy zasób jest różny od obecnego
                     # Obliczanie SPELR dla każdej pary zadanie-zasób
                     splr = self.compute_splr(task, resource)
                     # Znajdowanie najlepszego zasobu dla realokacji
@@ -93,15 +93,6 @@ class CloudResourceAllocation:
         current_utility = self.calculate_utility(task_index, self.get_current_resource(task_index))
         new_utility = self.calculate_utility(task_index, resource_index)
         return current_utility - new_utility
-
-    def get_current_resource(self, task_index):
-        """
-        Zwraca indeks obecnego zasobu przypisanego do zadania.
-        """
-        for j in range(self.num_resources):
-            if self.allocation_matrix[task_index][j] == 1:
-                return j
-        return None
 
     def minimize_gelr(self):
         """
@@ -158,14 +149,17 @@ class CloudResourceAllocation:
         return best_resource
 
     def find_nash_equilibrium(self):
-        """
-        Szukanie równowagi Nasha.
-        """
-        for task in range(self.num_tasks):
-            for resource in range(self.num_resources):
-                if self.can_improve_nash(task, resource):
-                    return False
-        return True
+        changes_made = True
+        while changes_made:
+            changes_made = False
+            for task in range(self.num_tasks):
+                for resource in range(self.num_resources):
+                    if self.can_improve_nash(task, resource):
+                        self.perform_reallocation(task, self.get_current_resource(task), resource)
+                        changes_made = True
+            if not changes_made:
+                return True
+        return False
 
     def can_improve_nash(self, task_index, resource_index):
         """
@@ -183,15 +177,17 @@ class CloudResourceAllocation:
         return new_utility > current_utility
 
     def calculate_utility(self, task_index, resource_index):
-        """
-        Oblicza użyteczność zadania w kontekście alokacji do danego zasobu.
-        """
-        # Załóżmy, że użyteczność jest odwrotnie proporcjonalna do czasu przetwarzania
-        # i jest związana z kosztem alokacji
-        if self.allocation_matrix[task_index][resource_index] == 1:
+        if resource_index is not None and task_index < len(self.processing_times) and resource_index < len(
+                self.cost_matrix[task_index]):
             return 1 / (self.processing_times[task_index] * self.cost_matrix[task_index][resource_index])
         else:
-            return 0
+            return 0  # lub inna obsługa błędu
+
+    def get_current_resource(self, task_index):
+        for j in range(self.num_resources):
+            if self.allocation_matrix[task_index][j] == 1:
+                return j
+        return -1  # Zwróć -1, jeśli nie znaleziono zasobu
 
     def calculate_utility_after_reallocation(self, task_index, resource_index):
         """
@@ -240,6 +236,13 @@ class CloudResourceAllocation:
             print(' '.join(map(str, row)))
         print()
 
+    def update_resource_parameters(self, num_tasks, num_resources):
+        self.num_tasks = num_tasks
+        self.num_resources = num_resources
+        self.processing_times = [random.randint(1, 10) for _ in range(num_tasks)]
+        self.cost_matrix = [[random.randint(1, 10) for _ in range(num_resources)] for _ in range(num_tasks)]
+        self.allocation_matrix = [[0 for _ in range(num_resources)] for _ in range(num_tasks)]
+
     def run(self):
         # Uruchomienie początkowej optymalizacji
         self.initial_optimization()
@@ -250,23 +253,84 @@ class CloudResourceAllocation:
         self.evolutionary_optimization()
         # Wyświetla macierz alokacji po optymalizacji
         self.print_allocation_matrix("Macierz Alokacji Końcowej:")
-        # Sprawdzenie, czy osiągnięto równowagę Nasha
+        # Próba znalezienia równowagi Nasha
         if self.find_nash_equilibrium():
             print("Znaleziono równowagę Nasha.")
         else:
             print("Nie znaleziono równowagi Nasha.")
 
+    # Metoda do Punktu 1: Porównanie Metod Inicjalizacji
+    def compare_initialization_methods(self, methods):
+        results = {}
+        for method in methods:
+            self.initialize_with_method(method)
+            results[method] = self.collect_performance_data()
+        return results
+
+    def initialize_with_method(self, method):
+        if method == "random":
+            print("Inicjalizacja losowa")
+            # Tutaj implementacja inicjalizacji losowej
+        elif method == "greedy":
+            print("Inicjalizacja zachłanna")
+            # Tutaj implementacja inicjalizacji zachłannej
+
+    # Metoda do Punktu 2: Porównanie wyników dla różnej liczby zadań i zasobów
+    def compare_different_configurations(self):
+        results = {}
+        for tasks in range(5, 11):
+            for resources in range(5, 11):
+                self.update_resource_parameters(tasks, resources)
+                self.run()
+                results[(tasks, resources)] = self.collect_performance_data()
+        return results
+
+    # Metoda do Punktu 3: Sposób na zbieranie danych
+    def collect_performance_data(self):
+        total_time = sum(self.processing_times)
+        average_time = total_time / self.num_tasks
+        user_satisfaction = self.calculate_user_satisfaction()
+        return {"total_time": total_time, "average_time": average_time, "user_satisfaction": user_satisfaction}
+
+    def calculate_user_satisfaction(self):
+        return random.uniform(0, 1)  # Zwraca losową wartość zadowolenia użytkownika
+
+    # Metoda do Punktu 4: Weryfikacja Wyników
+    def verify_results(self, theoretical_results):
+        actual_results = self.collect_performance_data()
+        return actual_results == theoretical_results
+
+    # Metoda do Punktu 5: Ocena wydajności w warunkach dynamicznych
+    def dynamic_performance_evaluation(self, changes):
+        for _ in range(changes):
+            self.num_tasks = random.randint(5, 10)
+            self.num_resources = random.randint(5, 10)
+            self.run()
+            print(self.collect_performance_data())
+
 
 if __name__ == '__main__':
-    # Przykładowe dane wejściowe
     num_tasks = 5
     num_resources = 5
     cost_matrix = [[random.randint(1, 10) for _ in range(num_resources)] for _ in range(num_tasks)]
     processing_times = [random.randint(1, 10) for _ in range(num_tasks)]
 
-    print("Czas:")
-    print(processing_times)
-
-    # Utworzenie instancji klasy i uruchomienie procesu optymalizacji
     allocation_system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
     allocation_system.run()
+
+    # Wywołanie metod dla poszczególnych punktów
+    print("Porównanie metod inicjalizacji:")
+    print(allocation_system.compare_initialization_methods(["random", "greedy"]))
+
+    print("Porównanie różnych konfiguracji:")
+    print(allocation_system.compare_different_configurations())
+
+    print("Zbieranie danych o wydajności:")
+    print(allocation_system.collect_performance_data())
+
+    print("Weryfikacja wyników:")
+    theoretical_results = {"total_time": 50, "average_time": 10, "user_satisfaction": 0.5}
+    print(allocation_system.verify_results(theoretical_results))
+
+    print("Ocena wydajności w warunkach dynamicznych:")
+    allocation_system.dynamic_performance_evaluation(5)
