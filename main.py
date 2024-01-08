@@ -270,10 +270,26 @@ class CloudResourceAllocation:
     def initialize_with_method(self, method):
         if method == "random":
             print("Inicjalizacja losowa")
-            # Tutaj implementacja inicjalizacji losowej
+            # Inicjalizacja losowa: Przypisanie zadań do zasobów w sposób losowy
+            for i in range(self.num_tasks):
+                random_resource = random.randint(0, self.num_resources - 1)
+                self.allocation_matrix[i][random_resource] = 1
+
         elif method == "greedy":
             print("Inicjalizacja zachłanna")
-            # Tutaj implementacja inicjalizacji zachłannej
+            # Inicjalizacja zachłanna: Wybieranie zadań i zasobów w sposób zachłanny
+            tasks_remaining = list(range(self.num_tasks))
+            resources_remaining = list(range(self.num_resources))
+
+            while tasks_remaining:
+                task = random.choice(tasks_remaining)
+                resource = random.choice(resources_remaining)
+
+                self.allocation_matrix[task][resource] = 1
+
+                # Usunięcie wybranego zadania i zasobu z dostępnych
+                tasks_remaining.remove(task)
+                resources_remaining.remove(resource)
 
     # Metoda do Punktu 2: Porównanie wyników dla różnej liczby zadań i zasobów
     def compare_different_configurations(self):
