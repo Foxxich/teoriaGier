@@ -1,5 +1,9 @@
+import csv
+
 import pulp
 import random
+
+from matplotlib import pyplot as plt
 
 
 class CloudResourceAllocation:
@@ -324,6 +328,56 @@ class CloudResourceAllocation:
             self.run()
             print(self.collect_performance_data())
 
+    def save_results_to_csv(self, results, filename='results.csv'):
+        with open(filename, 'w', newline='') as csv_file:
+            fieldnames = ["Tasks", "Resources", "Total Time", "Average Time", "User Satisfaction"]
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+
+            # Write the header row
+            writer.writeheader()
+
+            # Write the data rows
+            for (tasks, resources), data in results.items():
+                writer.writerow({
+                    "Tasks": tasks,
+                    "Resources": resources,
+                    "Total Time": data["total_time"],
+                    "Average Time": data["average_time"],
+                    "User Satisfaction": data["user_satisfaction"]
+                })
+
+    def plot_performance_data(self, data, filename):
+        total_times = [data[key]["total_time"] for key in data]
+        average_times = [data[key]["average_time"] for key in data]
+        user_satisfactions = [data[key]["user_satisfaction"] for key in data]
+
+        plt.figure(figsize=(12, 4))
+
+        plt.subplot(131)
+        plt.plot(total_times)
+        plt.title("Total Times")
+
+        plt.subplot(132)
+        plt.plot(average_times)
+        plt.title("Average Times")
+
+        plt.subplot(133)
+        plt.plot(user_satisfactions)
+        plt.title("User Satisfaction")
+
+        plt.tight_layout()
+        plt.savefig('results.jpg')
+
+    def run_and_save_results(self):
+        results = {}
+        for tasks in range(5, 11):
+            for resources in range(5, 11):
+                self.update_resource_parameters(tasks, resources)
+                self.run()
+                results[(tasks, resources)] = self.collect_performance_data()
+
+        self.save_results_to_csv(results)
+        self.plot_performance_data(results, "performance_plots.png")
 
 if __name__ == '__main__':
     num_tasks = 5
@@ -332,7 +386,7 @@ if __name__ == '__main__':
     processing_times = [random.randint(1, 10) for _ in range(num_tasks)]
 
     allocation_system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
-    allocation_system.run()
+    allocation_system.run_and_save_results()
 
     # Wywołanie metod dla poszczególnych punktów
     print("Porównanie metod inicjalizacji:")
