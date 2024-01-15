@@ -1,5 +1,8 @@
 import pulp
 import random
+import itertools
+
+from matplotlib import pyplot as plt
 
 
 class CloudResourceAllocation:
@@ -77,7 +80,7 @@ class CloudResourceAllocation:
             current_resource = self.get_current_resource(task)  # Pobranie obecnego zasobu dla zadania
 
             for resource in range(self.num_resources):
-                if resource != current_resource: # Sprawdzanie, czy zasób jest różny od obecnego
+                if resource != current_resource:  # Sprawdzanie, czy zasób jest różny od obecnego
                     # Obliczanie SPELR dla każdej pary zadanie-zasób
                     splr = self.compute_splr(task, resource)
                     # Znajdowanie najlepszego zasobu dla realokacji
@@ -266,6 +269,18 @@ class CloudResourceAllocation:
         for task, resource in enumerate(best_allocation):
             self.allocation_matrix[task][resource] = 1
 
+    def calculate_total_cost(self):
+        """
+        Oblicza całkowity koszt alokacji zadań do zasobów.
+        """
+        total_cost = 0
+        for i in range(self.num_tasks):
+            for j in range(self.num_resources):
+                if self.allocation_matrix[i][j] == 1:
+                    total_cost += self.processing_times[i] * self.cost_matrix[i][j]
+        return total_cost
+
+
     def run(self):
         # Uruchomienie początkowej optymalizacji
         self.initial_optimization()
@@ -288,66 +303,184 @@ class CloudResourceAllocation:
             resource = random.randint(0, self.num_resources - 1)
             self.allocation_matrix[i][resource] = 1
 
-def compare_different_number_of_tasks(max_tasks, num_resources):
+
+def compare_different_number_of_tasks(max_tasks, num_resources, trials=5):
+    tasks_costs_initial = []
+    tasks_costs_final = []
     for num_tasks in range(1, max_tasks + 1):
-        allocation_system = CloudResourceAllocation(
-            num_tasks, num_resources, generate_cost_matrix(num_tasks, num_resources),
-            generate_processing_times(num_tasks))
-        allocation_system.run()
-        # Tu dodaj kod do analizy i zapisu wyników
+        cost_initial, cost_final = [], []
+        for _ in range(trials):
+            cost_matrix = generate_cost_matrix(num_tasks, num_resources)
+            processing_times = generate_processing_times(num_tasks)
+            system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
+            system.initial_optimization()
+            cost_initial.append(system.calculate_total_cost())
+            system.minimize_splr()
+            system.minimize_gelr()
+            system.evolutionary_optimization()
+            cost_final.append(system.calculate_total_cost())
+        tasks_costs_initial.append(sum(cost_initial) / trials)
+        tasks_costs_final.append(sum(cost_final) / trials)
+    return tasks_costs_initial, tasks_costs_final
 
-def compare_different_number_of_resources(num_tasks, max_resources):
+
+def compare_different_number_of_resources(num_tasks, max_resources, trials=5):
+    resources_costs_initial = []
+    resources_costs_final = []
     for num_resources in range(1, max_resources + 1):
-        allocation_system = CloudResourceAllocation(
-            num_tasks, num_resources, generate_cost_matrix(num_tasks, num_resources),
-            generate_processing_times(num_tasks))
-        allocation_system.run()
-        # Tu dodaj kod do analizy i zapisu wyników
+        cost_initial, cost_final = [], []
+        for _ in range(trials):
+            cost_matrix = generate_cost_matrix(num_tasks, num_resources)
+            processing_times = generate_processing_times(num_tasks)
+            system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
+            system.initial_optimization()
+            cost_initial.append(system.calculate_total_cost())
+            system.minimize_splr()
+            system.minimize_gelr()
+            system.evolutionary_optimization()
+            cost_final.append(system.calculate_total_cost())
+        resources_costs_initial.append(sum(cost_initial) / trials)
+        resources_costs_final.append(sum(cost_final) / trials)
+    return resources_costs_initial, resources_costs_final
 
-import itertools
 
 def generate_cost_matrix(num_tasks, num_resources):
     return [[random.randint(1, 10) for _ in range(num_resources)] for _ in range(num_tasks)]
+
 
 def generate_processing_times(num_tasks):
     return [random.randint(1, 10) for _ in range(num_tasks)]
 
 
-if __name__ == '__main__':
-    if __name__ == '__main__':
-        # Przykładowe dane wejściowe
-        num_tasks = 5
-        num_resources = 5
+def compare_initialization_methods(num_tasks, num_resources, trials=10):
+    random_costs = []
+    initial_costs = []
+    for _ in range(trials):
         cost_matrix = generate_cost_matrix(num_tasks, num_resources)
         processing_times = generate_processing_times(num_tasks)
 
-        print("Czas:")
-        print(processing_times)
+        # Losowa inicjalizacja
+        system_random = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
+        system_random.random_initialization()
+        random_costs.append(system_random.calculate_total_cost())
 
-        # Utworzenie instancji klasy i uruchomienie procesu optymalizacji
-        allocation_system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
-        allocation_system.random_initialization()
-        allocation_system.print_allocation_matrix("Macierz Alokacji po Losowej Inicjalizacji:")
-        allocation_system.initial_optimization()
-        allocation_system.print_allocation_matrix("Macierz Alokacji po Optymalizacji Początkowej:")
-        allocation_system.minimize_splr()
-        allocation_system.minimize_gelr()
-        allocation_system.evolutionary_optimization()
-        allocation_system.print_allocation_matrix("Macierz Alokacji po Optymalizacjach:")
-        if allocation_system.find_nash_equilibrium():
-            print("Znaleziono równowagę Nasha.")
-        else:
-            print("Nie znaleziono równowagi Nasha.")
+        # Inicjalizacja początkowa
+        system_initial = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
+        system_initial.initial_optimization()
+        initial_costs.append(system_initial.calculate_total_cost())
 
-        # Przeprowadzenie eksperymentów z różną liczbą zadań i zasobów
-        print("Eksperymenty z różną liczbą zadań:")
-        compare_different_number_of_tasks(10, num_resources)
+    # Generowanie wykresu
+    plt.figure()
+    plt.boxplot([random_costs, initial_costs], labels=['Losowa', 'Początkowa'])
+    plt.ylabel('Koszt')
+    plt.title('Porównanie Metod Inicjalizacji')
+    plt.savefig('1.jpg')
 
-        print("Eksperymenty z różną liczbą zasobów:")
-        compare_different_number_of_resources(num_tasks, 10)
 
-        # Podejście Brute Force dla małej instancji
-        print("Podejście Brute Force dla małej instancji:")
-        small_system = CloudResourceAllocation(3, 3, generate_cost_matrix(3, 3), generate_processing_times(3))
-        small_system.brute_force_optimization()
-        small_system.print_allocation_matrix("Macierz Alokacji po Brute Force:")
+def compare_tasks_resources(max_tasks, max_resources, trials=5):
+    tasks_costs = []
+    for num_tasks in range(1, max_tasks + 1):
+        cost = []
+        for _ in range(trials):
+            cost_matrix = generate_cost_matrix(num_tasks, max_resources)
+            processing_times = generate_processing_times(num_tasks)
+            system = CloudResourceAllocation(num_tasks, max_resources, cost_matrix, processing_times)
+            system.initial_optimization()
+            system.minimize_splr()
+            system.minimize_gelr()
+            system.evolutionary_optimization()
+            cost.append(system.calculate_total_cost())
+        tasks_costs.append(sum(cost) / trials)
+
+    resources_costs = []
+    for num_resources in range(1, max_resources + 1):
+        cost = []
+        for _ in range(trials):
+            cost_matrix = generate_cost_matrix(max_tasks, num_resources)
+            processing_times = generate_processing_times(max_tasks)
+            system = CloudResourceAllocation(max_tasks, num_resources, cost_matrix, processing_times)
+            system.initial_optimization()
+            system.minimize_splr()
+            system.minimize_gelr()
+            system.evolutionary_optimization()
+            cost.append(system.calculate_total_cost())
+        resources_costs.append(sum(cost) / trials)
+
+    return tasks_costs, resources_costs
+
+
+def compare_brute_force_performance(num_tasks, num_resources, trials=10):
+    optimized_costs = []
+    brute_force_costs = []
+
+    for _ in range(trials):
+        cost_matrix = generate_cost_matrix(num_tasks, num_resources)
+        processing_times = generate_processing_times(num_tasks)
+
+        # Optymalizacja za pomocą istniejących metod
+        system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
+        system.initial_optimization()
+        optimized_costs.append(system.calculate_total_cost())
+
+        # Podejście Brute Force
+        system.brute_force_optimization()
+        brute_force_costs.append(system.calculate_total_cost())
+
+    # Generowanie wykresu
+    plt.figure()
+    plt.boxplot([optimized_costs, brute_force_costs], labels=['Optymalizowane', 'Brute Force'])
+    plt.ylabel('Koszt')
+    plt.title('Porównanie Wydajności Brute Force')
+    plt.savefig('3.jpg')
+
+    # Zwracanie średnich kosztów
+    return sum(optimized_costs) / len(optimized_costs), sum(brute_force_costs) / len(brute_force_costs)
+
+
+if __name__ == '__main__':
+    # Przykładowe dane wejściowe
+    num_tasks = 5
+    num_resources = 5
+    cost_matrix = generate_cost_matrix(num_tasks, num_resources)
+    processing_times = generate_processing_times(num_tasks)
+
+    print("Czas:")
+    print(processing_times)
+
+    # Utworzenie instancji klasy i uruchomienie procesu optymalizacji
+    allocation_system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
+    allocation_system.random_initialization()
+    allocation_system.print_allocation_matrix("Macierz Alokacji po Losowej Inicjalizacji:")
+    allocation_system.initial_optimization()
+    allocation_system.print_allocation_matrix("Macierz Alokacji po Optymalizacji Początkowej:")
+    allocation_system.minimize_splr()
+    allocation_system.minimize_gelr()
+    allocation_system.evolutionary_optimization()
+    allocation_system.print_allocation_matrix("Macierz Alokacji po Optymalizacjach:")
+    if allocation_system.find_nash_equilibrium():
+        print("Znaleziono równowagę Nasha.")
+    else:
+        print("Nie znaleziono równowagi Nasha.")
+
+    # Porównanie metod inicjalizacji
+    print("\nPorównanie metod inicjalizacji:")
+    compare_initialization_methods(num_tasks, num_resources)
+
+    # Porównanie wyników dla różnej liczby zadań
+    print("\nPorównanie wyników dla różnej liczby zadań:")
+    tasks_costs, resources_costs = compare_tasks_resources(10, 10)
+    for num_tasks, cost in zip(range(1, 11), tasks_costs):
+        print(f"Liczba zadań: {num_tasks}, Średni koszt: {cost}")
+    for num_resources, cost in zip(range(1, 11), resources_costs):
+        print(f"Liczba zasobów: {num_resources}, Średni koszt: {cost}")
+
+    # Porównanie wyników dla różnej liczby zasobów
+    print("\nPorównanie wyników dla różnej liczby zasobów:")
+    resources_costs_initial, resources_costs_final = compare_different_number_of_resources(num_tasks, 10)
+    for num_resources, cost_initial, cost_final in zip(range(1, 11), resources_costs_initial, resources_costs_final):
+        print(f"Liczba zasobów: {num_resources}, Koszt początkowy: {cost_initial}, Koszt końcowy: {cost_final}")
+        # Porównanie oceny wydajności podejścia brute force
+        print("\nPorównanie oceny wydajności podejścia brute force:")
+        optimized_cost, brute_force_cost = compare_brute_force_performance(num_tasks, num_resources)
+        print(f"Średni koszt optymalizacji: {optimized_cost}")
+        print(f"Średni koszt Brute Force: {brute_force_cost}")
