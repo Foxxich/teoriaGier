@@ -128,7 +128,8 @@ class CloudResourceAllocation:
 
             if nsts:
                 min_gelr_task = min(nsts, key=lambda k: self.compute_gelr(k, resource))
-                self.perform_reallocation(min_gelr_task, resource, self.min_single(min_gelr_task, resource))
+                if self.min_single(min_gelr_task, resource) != -1:
+                    self.perform_reallocation(min_gelr_task, resource, self.min_single(min_gelr_task, resource))
 
     def compute_gelr(self, task_index, resource_index):
         """
@@ -156,7 +157,7 @@ class CloudResourceAllocation:
         i wybieramy ten, który minimalizuje GELR.
         """
         min_gelr = float('inf')
-        best_resource = None
+        best_resource = -1  # Use -1 to indicate no better resource found
         for r in range(self.num_resources):
             if r != resource:
                 current_gelr = self.compute_gelr(task, r)
@@ -180,7 +181,7 @@ class CloudResourceAllocation:
         Sprawdza, czy istnieje możliwość poprawy użyteczności zgodnie z równowagą Nasha.
         """
         current_resource = self.get_current_resource(task_index)
-        if current_resource == resource_index:
+        if current_resource is None or current_resource == resource_index:
             return False
 
         # Obliczanie użyteczności przed i po potencjalnej realokacji
@@ -248,6 +249,23 @@ class CloudResourceAllocation:
             print(' '.join(map(str, row)))
         print()
 
+    def brute_force_optimization(self):
+        best_cost = float('inf')
+        best_allocation = None
+
+        for allocation in itertools.product(range(self.num_resources), repeat=self.num_tasks):
+            total_cost = 0
+            for i, resource in enumerate(allocation):
+                total_cost += self.processing_times[i] * self.cost_matrix[i][resource]
+            if total_cost < best_cost:
+                best_cost = total_cost
+                best_allocation = allocation
+
+        # Aktualizacja macierzy alokacji
+        self.allocation_matrix = [[0 for _ in range(self.num_resources)] for _ in range(self.num_tasks)]
+        for task, resource in enumerate(best_allocation):
+            self.allocation_matrix[task][resource] = 1
+
     def run(self):
         # Uruchomienie początkowej optymalizacji
         self.initial_optimization()
@@ -287,23 +305,6 @@ def compare_different_number_of_resources(num_tasks, max_resources):
         # Tu dodaj kod do analizy i zapisu wyników
 
 import itertools
-
-def brute_force_optimization(self):
-    best_cost = float('inf')
-    best_allocation = None
-
-    for allocation in itertools.product(range(self.num_resources), repeat=self.num_tasks):
-        total_cost = 0
-        for i, resource in enumerate(allocation):
-            total_cost += self.processing_times[i] * self.cost_matrix[i][resource]
-        if total_cost < best_cost:
-            best_cost = total_cost
-            best_allocation = allocation
-
-    # Aktualizacja macierzy alokacji
-    self.allocation_matrix = [[0 for _ in range(self.num_resources)] for _ in range(self.num_tasks)]
-    for task, resource in enumerate(best_allocation):
-        self.allocation_matrix[task][resource] = 1
 
 def generate_cost_matrix(num_tasks, num_resources):
     return [[random.randint(1, 10) for _ in range(num_resources)] for _ in range(num_tasks)]
