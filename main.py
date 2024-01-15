@@ -44,6 +44,9 @@ class CloudResourceAllocation:
             new_resource = random.randint(0, self.num_resources - 1)
             current_resource = self.get_current_resource(task)
 
+            if current_resource is None:
+                continue  # Pomiń, jeśli zadanie nie ma przypisanego zasobu
+
             if current_resource != new_resource and self.can_improve_solution(task, new_resource):
                 self.perform_reallocation(task, current_resource, new_resource)
 
@@ -90,7 +93,12 @@ class CloudResourceAllocation:
         """
         Oblicza SPELR dla danego zadania i zasobu.
         """
-        current_utility = self.calculate_utility(task_index, self.get_current_resource(task_index))
+        current_resource = self.get_current_resource(task_index)
+        if current_resource is None:
+            # Obsługa sytuacji, gdy żaden zasób nie jest przypisany
+            return float('inf')
+
+        current_utility = self.calculate_utility(task_index, current_resource)
         new_utility = self.calculate_utility(task_index, resource_index)
         return current_utility - new_utility
 
@@ -256,17 +264,89 @@ class CloudResourceAllocation:
         else:
             print("Nie znaleziono równowagi Nasha.")
 
+    def random_initialization(self):
+        for i in range(self.num_tasks):
+            # Losowe przypisanie zadania do zasobu
+            resource = random.randint(0, self.num_resources - 1)
+            self.allocation_matrix[i][resource] = 1
+
+def compare_different_number_of_tasks(max_tasks, num_resources):
+    for num_tasks in range(1, max_tasks + 1):
+        allocation_system = CloudResourceAllocation(
+            num_tasks, num_resources, generate_cost_matrix(num_tasks, num_resources),
+            generate_processing_times(num_tasks))
+        allocation_system.run()
+        # Tu dodaj kod do analizy i zapisu wyników
+
+def compare_different_number_of_resources(num_tasks, max_resources):
+    for num_resources in range(1, max_resources + 1):
+        allocation_system = CloudResourceAllocation(
+            num_tasks, num_resources, generate_cost_matrix(num_tasks, num_resources),
+            generate_processing_times(num_tasks))
+        allocation_system.run()
+        # Tu dodaj kod do analizy i zapisu wyników
+
+import itertools
+
+def brute_force_optimization(self):
+    best_cost = float('inf')
+    best_allocation = None
+
+    for allocation in itertools.product(range(self.num_resources), repeat=self.num_tasks):
+        total_cost = 0
+        for i, resource in enumerate(allocation):
+            total_cost += self.processing_times[i] * self.cost_matrix[i][resource]
+        if total_cost < best_cost:
+            best_cost = total_cost
+            best_allocation = allocation
+
+    # Aktualizacja macierzy alokacji
+    self.allocation_matrix = [[0 for _ in range(self.num_resources)] for _ in range(self.num_tasks)]
+    for task, resource in enumerate(best_allocation):
+        self.allocation_matrix[task][resource] = 1
+
+def generate_cost_matrix(num_tasks, num_resources):
+    return [[random.randint(1, 10) for _ in range(num_resources)] for _ in range(num_tasks)]
+
+def generate_processing_times(num_tasks):
+    return [random.randint(1, 10) for _ in range(num_tasks)]
+
 
 if __name__ == '__main__':
-    # Przykładowe dane wejściowe
-    num_tasks = 5
-    num_resources = 5
-    cost_matrix = [[random.randint(1, 10) for _ in range(num_resources)] for _ in range(num_tasks)]
-    processing_times = [random.randint(1, 10) for _ in range(num_tasks)]
+    if __name__ == '__main__':
+        # Przykładowe dane wejściowe
+        num_tasks = 5
+        num_resources = 5
+        cost_matrix = generate_cost_matrix(num_tasks, num_resources)
+        processing_times = generate_processing_times(num_tasks)
 
-    print("Czas:")
-    print(processing_times)
+        print("Czas:")
+        print(processing_times)
 
-    # Utworzenie instancji klasy i uruchomienie procesu optymalizacji
-    allocation_system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
-    allocation_system.run()
+        # Utworzenie instancji klasy i uruchomienie procesu optymalizacji
+        allocation_system = CloudResourceAllocation(num_tasks, num_resources, cost_matrix, processing_times)
+        allocation_system.random_initialization()
+        allocation_system.print_allocation_matrix("Macierz Alokacji po Losowej Inicjalizacji:")
+        allocation_system.initial_optimization()
+        allocation_system.print_allocation_matrix("Macierz Alokacji po Optymalizacji Początkowej:")
+        allocation_system.minimize_splr()
+        allocation_system.minimize_gelr()
+        allocation_system.evolutionary_optimization()
+        allocation_system.print_allocation_matrix("Macierz Alokacji po Optymalizacjach:")
+        if allocation_system.find_nash_equilibrium():
+            print("Znaleziono równowagę Nasha.")
+        else:
+            print("Nie znaleziono równowagi Nasha.")
+
+        # Przeprowadzenie eksperymentów z różną liczbą zadań i zasobów
+        print("Eksperymenty z różną liczbą zadań:")
+        compare_different_number_of_tasks(10, num_resources)
+
+        print("Eksperymenty z różną liczbą zasobów:")
+        compare_different_number_of_resources(num_tasks, 10)
+
+        # Podejście Brute Force dla małej instancji
+        print("Podejście Brute Force dla małej instancji:")
+        small_system = CloudResourceAllocation(3, 3, generate_cost_matrix(3, 3), generate_processing_times(3))
+        small_system.brute_force_optimization()
+        small_system.print_allocation_matrix("Macierz Alokacji po Brute Force:")
