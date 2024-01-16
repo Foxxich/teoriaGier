@@ -1,0 +1,5 @@
+Approach,Execution Time,Initial Cost,Final Cost
+Comparison of Initialization Methods,0.01695537567138672,95,95
+Comparison of Results for Different Number of Tasks,2.0291671752929688,338.6,330.4
+Comparison of Results for Different Number of Resources,0.8913383483886719,160.0,169.4
+Brute Force Approach,0.34108781814575195,70.4,142.2
