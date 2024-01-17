@@ -2,7 +2,6 @@ import pulp
 import random
 import itertools
 
-
 class CloudResourceAllocation:
     def __init__(self, num_tasks, num_resources, cost_matrix, processing_times):
         self.num_tasks = num_tasks
@@ -42,20 +41,109 @@ class CloudResourceAllocation:
             self.allocation_matrix[i][resource] = 1
 
     def evolutionary_optimization(self):
-        """
-        Algorytm 3: Optymalizacja Ewolucyjna
-        Założenie: Prosty mechanizm ewolucyjny, który losowo realokuje zadania
-        """
-        for _ in range(100):
-            task = random.randint(0, self.num_tasks - 1)
-            new_resource = random.randint(0, self.num_resources - 1)
-            current_resource = self.get_current_resource(task)
+        i = 0  # Rozpocznij od pierwszego zadania (indeks 0 w indeksacji od zera)
+        flag = True
+        while flag:  # Kontynuuj, dopóki nie zostaną dokonane żadne zmiany w pełnym przebiegu
+            flag = False  # Zresetuj flagę dla bieżącego przebiegu
+            while True:
+                ms = self.obtain_multiplexing_resource_vector(i)  # Pobierz wektor zasobów dla zadania
+                for j in ms:
+                    q = self.MinGlobal(i, j)  # Znajdź nową alokację zasobów
+                    if q != -1:  # Jeśli nowa alokacja jest możliwa
+                        p = self.MinSingle(i, j)  # Znajdź optymalną pojedynczą alokację
+                        if p != -1 and p != q:  # Jeśli znaleziono lepszą alokację i jest ona różna od obecnej
+                            self.execute_reallocation(i, j, p)  # Dokonaj realokacji
+                            flag = True  # Ustaw flagę na True, ponieważ dokonano zmiany
+                            print(f"Zadanie {i + 1} - zasób {j} realokacja do {p} wykonana.")
 
-            if current_resource is None:
-                continue  # Pomiń, jeśli zadanie nie ma przypisanego zasobu
+                if i == self.num_tasks - 1:  # Sprawdź, czy osiągnięto ostatnie zadanie
+                    if not flag:
+                        break  # Żadne realokacje nie zostały wykonane w tym przebiegu, więc przerwij pętlę
+                    else:
+                        i = 0  # Zresetuj indeks zadania na 0, aby rozpocząć nowy przebieg
+                else:
+                    i += 1  # Przejdź do następnego zadania
 
-            if current_resource != new_resource and self.can_improve_solution(task, new_resource):
-                self.perform_reallocation(task, current_resource, new_resource)
+        print("Optymalizacja ewolucyjna zakończona.")
+
+    def tij(self, resource_j):
+        # Ta funkcja powinna zwracać pewną metrykę związaną z zadaniem i zasobem j
+        # Jako przykład, zwracam losową wartość. Należy ją zastąpić rzeczywistą logiką.
+        return random.random()
+
+    def obtain_multiplexing_resource_vector(self, task_i):
+        # Zakładając, że każde zadanie może być przypisane tylko do jednego zasobu na raz
+        current_resource = self.get_current_resource(task_i)
+        return [j for j in range(self.num_resources) if j != current_resource]
+
+    def MinGlobal(self, task_i, resource_j):
+        # Znajdź zasób minimalizujący globalny koszt dla zadania task_i, wykluczając bieżący zasób resource_j
+        min_cost = float('inf')
+        min_resource_index = -1
+        for r in range(self.num_resources):
+            if r != resource_j:
+                cost = self.calculate_global_cost(task_i, r)  # Należy zdefiniować tę metodę na podstawie problemu
+                if cost < min_cost:
+                    min_cost = cost
+                    min_resource_index = r
+        return min_resource_index if min_cost < self.calculate_global_cost(task_i, resource_j) else -1
+
+    def MinSingle(self, task_i, resource_j):
+        # Znajdź zasób minimalizujący pojedynczy koszt zadania task_i, wykluczając bieżący zasób resource_j
+        min_cost = float('inf')
+        min_resource_index = -1
+        for r in range(self.num_resources):
+            if r != resource_j:
+                cost = self.calculate_single_task_cost(task_i, r)  # Należy zdefiniować tę metodę na podstawie problemu
+                if cost < min_cost:
+                    min_cost = cost
+                    min_resource_index = r
+        return min_resource_index if min_cost < self.calculate_single_task_cost(task_i, resource_j) else -1
+
+    def calculate_single_task_cost(self, task_i, resource_j):
+        """
+        Oblicz koszt przypisania zadania task_i do zasobu resource_j.
+        Przykład używa prostego modelu kosztów opartego na czasach przetwarzania i macierzy kosztów.
+        """
+        # Zakładamy, że processing_times to lista, gdzie processing_times[i] to czas przetwarzania zadania i
+        # oraz cost_matrix to macierz, gdzie cost_matrix[i][j] to czynnik kosztu przypisania zadania i do zasobu j
+        task_cost = self.processing_times[task_i] * self.cost_matrix[task_i][resource_j]
+        return task_cost
+
+    def calculate_global_cost(self, task_i, resource_j):
+        """
+        Oblicz globalny koszt przypisania zadania task_i do zasobu resource_j, biorąc pod uwagę wszystkie zadania i zasoby.
+        Przykład zakłada, że cost_matrix to macierz kosztów alokacji, gdzie cost_matrix[i][j] to koszt
+        przypisania zadania i do zasobu j.
+        """
+        if task_i < 0 or task_i >= self.num_tasks or resource_j < 0 or resource_j >= self.num_resources:
+            raise ValueError("Indeks task_i lub resource_j poza zakresem")
+
+        current_global_cost = 0
+        for t in range(self.num_tasks):
+            if t != task_i:
+                current_resource = self.get_current_resource(t)
+                if current_resource is not None:
+                    current_global_cost += self.cost_matrix[t][current_resource]
+                else:
+                    pass
+
+        # Dodaj koszt przypisania zadania task_i do zasobu resource_j
+        new_global_cost = current_global_cost + self.cost_matrix[task_i][resource_j]
+
+        return new_global_cost
+
+    def execute_reallocation(self, task_i, resource_j, resource_p):
+        """
+        Realokuje zadanie (task_i) z obecnego zasobu (resource_j)
+        do nowego zasobu (resource_p).
+        """
+        if task_i < 0 or task_i >= self.num_tasks or resource_p < 0 or resource_p >= self.num_resources:
+            return  # Either task_i or resource_p is out of range, so do nothing
+
+        current_resource = self.get_current_resource(task_i)
+        if current_resource is not None and current_resource != resource_p:
+            self.perform_reallocation(task_i, current_resource, resource_p)
 
     def can_improve_solution(self, task_index, resource_index):
         """
@@ -113,6 +201,9 @@ class CloudResourceAllocation:
         """
         Zwraca indeks obecnego zasobu przypisanego do zadania.
         """
+        if task_index < 0 or task_index >= self.num_tasks:
+            return None  # task_index is out of range
+
         for j in range(self.num_resources):
             if self.allocation_matrix[task_index][j] == 1:
                 return j
